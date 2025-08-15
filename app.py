@@ -11,12 +11,13 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, f1_score, r2_score, precision_score, recall_score, mean_absolute_error, mean_squared_error, confusion_matrix, roc_curve, auc
 import json
+import webview
 
 # Initialize the Flask application
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['SECRET_key'] = 'a-very-secret-key-that-you-should-change'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max upload size
+app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32 MB max upload size
 
 # Ensure the upload folder exists
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
@@ -390,4 +391,6 @@ def get_elbow_data():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Create a pywebview window and start the application
+    webview.create_window('Automated EDA Report', app)
+    webview.start()
