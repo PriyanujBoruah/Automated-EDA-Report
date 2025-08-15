@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature Relationship Results</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@^1"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        html {
+            scroll-behavior: smooth;
+        }
+        body { font-family: 'Inter', sans-serif; }
+        .table-container { max-height: 400px; overflow-y: auto; }
+        .data-preview-table tbody tr:nth-of-type(odd) { background-color: rgba(0, 0, 0, 0.05); }
+
+        .stats-table, .quality-table { border-collapse: collapse; }
+        .stats-table thead th, .quality-table thead th {
+            background-color: #f3f4f6; padding: 0.75rem 1rem; text-align: left;
+            font-size: 0.75rem; font-weight: 600; color: #4b5563;
+            text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e5e7eb;
+        }
+        .stats-table tbody tr:nth-child(even), .quality-table tbody tr:nth-child(even) { background-color: #f9fafb; }
+        .stats-table tbody tr:hover, .quality-table tbody tr:hover { background-color: #eef2ff; }
+        .stats-table td, .stats-table th, .quality-table td, .quality-table th { padding: 0.75rem 1rem; border-bottom: 1px solid #e5e7eb; white-space: nowrap; }
+        .stats-table tbody td:first-child, .stats-table thead th:first-child,
+        .quality-table tbody td:first-child, .quality-table thead th:first-child { font-weight: 600; color: #1f2937; }
+        
+        .loader { border-top-color: #3498db; -webkit-animation: spin 1s linear infinite; animation: spin 1s linear infinite; }
+        @-webkit-keyframes spin { 0% { -webkit-transform: rotate(0deg); } 100% { -webkit-transform: rotate(360deg); } }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 pt-16">
+    <input type="hidden" id="filename" value="{{ filename }}">
+
+    <!-- Navigation Bar -->
+    <nav class="fixed top-0 left-0 right-0 bg-white/90 backdrop-blur-md shadow-md z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Left: Logo and Name -->
+                <div class="flex items-center space-x-4">
+                    <div class="flex-shrink-0">
+                        <svg class="h-8 w-8 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                    </div>
+                    <div class="hidden md:block">
+                        <h1 class="text-xl font-bold text-gray-800">Automated EDA Report <span style="font-size: small; font-weight: 400;">By Priyanuj Boruah</span></h1>
+                    </div>
+                </div>
+
+                <!-- Right: Icons and Dropdown -->
+                <div class="flex items-center space-x-4">
+                    <a href="{{ url_for('index') }}" title="Analyze New File" class="bg-indigo-100 text-indigo-700 font-medium py-2 px-4 rounded-md hover:bg-indigo-200 text-sm">
+                        Analyze Another File
+                    </a>
+                    <button id="preview-btn" title="Preview Data" class="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700">
+                        <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                    </button>
+                    <div class="relative">
+                        <button id="menu-btn" class="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700">
+                            <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                            </svg>
+                        </button>
+                        <div id="menu-dropdown" class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 hidden">
+                            <div class="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
+                                <a href="#stats-section" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Statistics</a>
+                                <a href="#quality-section" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Data Quality</a>
+                                <a href="#correlation-section" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Correlation</a>
+                                <a href="#supervised-section" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Supervised Learning</a>
+                                <a href="#unsupervised-section" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Unsupervised Learning</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-4 sm:p-8">
+        <div class="max-w-5xl mx-auto bg-white rounded-xl shadow-md overflow-hidden">
+            <div class="p-8">
+                <h1 class="text-3xl font-bold text-center text-gray-900 mb-6">Data Analysis Report</h1>
+                
+                <div id="stats-section" class="bg-white p-6 rounded-lg mb-8 border border-gray-200">
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-4 text-center">Descriptive Statistics 📈</h2>
+                    <div class="mb-6">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-2">Numerical Columns</h3>
+                        <div class="table-container border border-gray-200 rounded-lg">{{ numerical_stats_table|safe }}</div>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-semibold text-gray-700 mb-2">Categorical Columns</h3>
+                        <div class="table-container border border-gray-200 rounded-lg">{{ categorical_stats_table|safe }}</div>
+                    </div>
+                </div>
+
+                <div id="quality-section" class="bg-white p-6 rounded-lg mb-8 border border-gray-200">
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-4 text-center">Data Quality Analysis 🧼</h2>
+                    <div class="mb-6">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-2">Missing Value Summary</h3>
+                        <p class="text-gray-600 mb-4">A summary of missing values for each column. Only columns with missing data are shown.</p>
+                        <div class="table-container border border-gray-200 rounded-lg">
+                            {{ missing_values_table|safe }}
+                        </div>
+                    </div>
+                </div>
+
+                <div id="correlation-section" class="bg-gray-50 p-6 rounded-lg mb-8">
+                    <div class="md:flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-semibold text-gray-800">Feature Relationship Chart</h2>
+                        <div>
+                            <label for="target_column" class="block text-sm font-medium text-gray-700">Select Target:</label>
+                            <select id="target_column" class="mt-1 block w-full md:w-auto pl-3 pr-10 py-2 text-base border-gray-300 rounded-md">
+                                {% for column in columns %}
+                                    <option value="{{ column }}" {% if column == target_variable %}selected{% endif %}>{{ column }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <p id="chart-subtitle" class="text-gray-600 mb-4">Correlation with target: '{{ target_variable }}'.</p>
+                    <div class="relative h-96"><canvas id="correlationChart"></canvas></div>
+                </div>
+
+                <div id="distribution-section" class="bg-gray-50 p-6 rounded-lg mb-8">
+                    <div class="md:flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-semibold text-gray-800">Column Distribution</h2>
+                        <div>
+                            <label for="histogram_column" class="block text-sm font-medium text-gray-700">Select Column:</label>
+                            <select id="histogram_column" class="mt-1 block w-full md:w-auto pl-3 pr-10 py-2 text-base border-gray-300 rounded-md">
+                                {% for column in numeric_columns %}
+                                    <option value="{{ column }}">{{ column }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="relative h-96"><canvas id="histogramChart"></canvas></div>
+                </div>
+                
+                <div id="scatter-section" class="bg-gray-50 p-6 rounded-lg mb-8">
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-4">Scatter Plot Analysis</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label for="scatter_x_column" class="block text-sm font-medium text-gray-700">X-Axis:</label>
+                            <select id="scatter_x_column" class="mt-1 block w-full rounded-md">
+                                {% for column in numeric_columns %}<option value="{{ column }}">{{ column }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label for="scatter_y_column" class="block text-sm font-medium text-gray-700">Y-Axis:</label>
+                            <select id="scatter_y_column" class="mt-1 block w-full rounded-md">
+                                {% for column in numeric_columns %}<option value="{{ column }}" {% if loop.index == 2 %}selected{% endif %}>{{ column }}</option>{% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="relative h-96"><canvas id="scatterChart"></canvas></div>
+                </div>
+
+                <div id="heatmap-section" class="bg-white p-6 rounded-lg mb-8 border border-gray-200">
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-4 text-center">Correlation Heatmap</h2>
+                    <p class="text-center text-gray-600 mb-4">Visualize the correlation between every pair of numeric features.</p>
+                    <div class="text-center">
+                        <button id="run-heatmap-btn" class="bg-purple-600 text-white font-medium py-2 px-6 rounded-md hover:bg-purple-700">Generate Heatmap</button>
+                    </div>
+                    <div id="heatmap-loader" class="hidden mx-auto mt-4 h-8 w-8 animate-spin rounded-full border-4 border-solid border-purple-500 border-t-transparent"></div>
+                    <div id="heatmap-chart-container" class="relative h-[600px] mt-4 hidden"><canvas id="heatmapChart"></canvas></div>
+                </div>
+
+                <div id="supervised-section" class="bg-white p-6 rounded-lg mb-8 border border-gray-200">
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-4 text-center">Supervised Learning: Feature Importance</h2>
+                    <p class="text-center text-gray-600 mb-4">Use machine learning models to identify the most predictive features for a given target.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <!-- Random Forest -->
+                        <div class="p-4 border rounded-lg space-y-4">
+                            <h3 class="text-lg font-semibold text-center">Random Forest</h3>
+                            <div class="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                    <label for="rf-n_estimators" class="font-medium text-gray-700">N Estimators:</label>
+                                    <input type="number" id="rf-n_estimators" value="100" min="10" class="w-full mt-1 border-gray-300 rounded-md">
+                                </div>
+                                <div>
+                                    <label for="rf-max_depth" class="font-medium text-gray-700">Max Depth:</label>
+                                    <input type="number" id="rf-max_depth" placeholder="None" min="1" class="w-full mt-1 border-gray-300 rounded-md">
+                                </div>
+                            </div>
+                            <button id="run-rf-btn" class="bg-indigo-600 text-white font-medium py-2 px-6 rounded-md hover:bg-indigo-700 w-full">Run Analysis</button>
+                            <div id="rf-loader" class="hidden mx-auto h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-t-transparent"></div>
+                            <div id="rf-metrics-container" class="hidden text-sm mt-4 p-3 bg-indigo-50 rounded-lg text-left"></div>
+                            <div id="rf-chart-container" class="relative h-96 hidden"><canvas id="rf-chart"></canvas></div>
+                            <div id="rf-advanced-eval-container" class="hidden mt-4">
+                                <h4 class="font-semibold text-center mb-2">Advanced Evaluation</h4>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="relative h-64"><canvas id="rf-cm-chart"></canvas></div>
+                                    <div class="relative h-64"><canvas id="rf-roc-chart"></canvas></div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- LightGBM -->
+                        <div class="p-4 border rounded-lg space-y-4">
+                            <h3 class="text-lg font-semibold text-center">LightGBM</h3>
+                            <div class="grid grid-cols-3 gap-2 text-sm">
+                                <div>
+                                    <label for="lgbm-n_estimators" class="font-medium text-gray-700">N Estimators:</label>
+                                    <input type="number" id="lgbm-n_estimators" value="100" min="10" class="w-full mt-1 border-gray-300 rounded-md">
+                                </div>
+                                <div>
+                                    <label for="lgbm-learning_rate" class="font-medium text-gray-700">Learn Rate:</label>
+                                    <input type="number" id="lgbm-learning_rate" value="0.1" step="0.01" class="w-full mt-1 border-gray-300 rounded-md">
+                                </div>
+                                <div>
+                                    <label for="lgbm-num_leaves" class="font-medium text-gray-700">Num Leaves:</label>
+                                    <input type="number" id="lgbm-num_leaves" value="31" min="2" class="w-full mt-1 border-gray-300 rounded-md">
+                                </div>
+                            </div>
+                            <button id="run-lgbm-btn" class="bg-teal-600 text-white font-medium py-2 px-6 rounded-md hover:bg-teal-700 w-full">Run Analysis</button>
+                            <div id="lgbm-loader" class="hidden mx-auto h-8 w-8 animate-spin rounded-full border-4 border-solid border-teal-500 border-t-transparent"></div>
+                            <div id="lgbm-metrics-container" class="hidden text-sm p-3 bg-teal-50 rounded-lg text-left"></div>
+                            <div id="lgbm-chart-container" class="relative h-96 hidden"><canvas id="lgbm-chart"></canvas></div>
+                            <div id="lgbm-advanced-eval-container" class="hidden mt-4">
+                                <h4 class="font-semibold text-center mb-2">Advanced Evaluation</h4>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="relative h-64"><canvas id="lgbm-cm-chart"></canvas></div>
+                                    <div class="relative h-64"><canvas id="lgbm-roc-chart"></canvas></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="unsupervised-section" class="bg-white p-6 rounded-lg mb-8 border border-gray-200">
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-4 text-center">Unsupervised Learning: Pattern Discovery</h2>
+                    <p class="text-center text-gray-600 mb-4">Discover hidden structures in the data without using a target column.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <!-- Left Column -->
+                        <div class="space-y-8">
+                            <!-- DBSCAN -->
+                            <div class="text-center p-4 border rounded-lg">
+                                <h3 class="text-lg font-semibold mb-2">DBSCAN Clustering</h3>
+                                <p class="text-sm text-gray-500 mb-4">Find clusters based on density and identify noise.</p>
+                                <button id="run-dbscan-btn" class="bg-pink-600 text-white font-medium py-2 px-6 rounded-md hover:bg-pink-700 w-full">Find Density Clusters</button>
+                                <div class="flex items-center justify-center space-x-4 mt-4">
+                                    <div>
+                                        <label for="dbscan-eps" class="text-sm font-medium">Eps:</label>
+                                        <input type="number" id="dbscan-eps" value="0.5" step="0.1" class="w-24 border-gray-300 rounded-md">
+                                    </div>
+                                    <div>
+                                        <label for="dbscan-min-samples" class="text-sm font-medium">Min Samples:</label>
+                                        <input type="number" id="dbscan-min-samples" value="5" min="1" class="w-20 border-gray-300 rounded-md">
+                                    </div>
+                                </div>
+                                <div id="dbscan-loader" class="hidden mx-auto mt-4 h-8 w-8 animate-spin rounded-full border-4 border-solid border-pink-500 border-t-transparent"></div>
+                                <div id="dbscan-chart-container" class="relative h-96 mt-4 hidden"><canvas id="dbscan-chart"></canvas></div>
+                            </div>
+                        </div>
+                        <!-- Right Column -->
+                        <div class="text-center p-4 border rounded-lg">
+                            <h3 class="text-lg font-semibold mb-2">Principal Component Analysis (PCA)</h3>
+                            <p class="text-sm text-gray-500 mb-4">Simplify and visualize the main patterns in the data.</p>
+                            <button id="run-pca-btn" class="bg-orange-500 text-white font-medium py-2 px-6 rounded-md hover:bg-orange-600 w-full">Run Analysis</button>
+                            <div id="pca-loader" class="hidden mx-auto mt-4 h-8 w-8 animate-spin rounded-full border-4 border-solid border-orange-500 border-t-transparent"></div>
+                            <div id="pca-chart-container" class="relative h-96 mt-4 hidden">
+                                <canvas id="pca-chart"></canvas>
+                                <p id="pca-variance" class="text-xs text-gray-500 mt-2"></p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- K-Means (Full Width) -->
+                    <div class="mt-8 p-4 border rounded-lg md:col-span-2">
+                        <h3 class="text-lg font-semibold mb-2 text-center">K-Means Clustering</h3>
+                        <p class="text-sm text-gray-500 mb-4 text-center">Group data into clusters. Use the Elbow Method to help find a good value for K.</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Left: Elbow Method -->
+                            <div class="text-center p-2 space-y-2">
+                                 <h4 class="font-semibold">1. Find Optimal K</h4>
+                                 <button id="run-elbow-btn" class="bg-gray-600 text-white font-medium py-2 px-6 rounded-md hover:bg-gray-700 w-full">Run Elbow Method</button>
+                                 <div id="elbow-loader" class="hidden mx-auto mt-4 h-8 w-8 animate-spin rounded-full border-4 border-solid border-gray-500 border-t-transparent"></div>
+                                 <div id="elbow-chart-container" class="relative h-80 mt-4 hidden"><canvas id="elbow-chart"></canvas></div>
+                            </div>
+                            <!-- Right: K-Means Clustering -->
+                            <div class="text-center p-2 space-y-2">
+                                <h4 class="font-semibold">2. Find Clusters</h4>
+                                <button id="run-kmeans-btn" class="bg-rose-600 text-white font-medium py-2 px-6 rounded-md hover:bg-rose-700 w-full">Run K-Means</button>
+                                <div class="flex items-center justify-center space-x-2">
+                                    <label for="kmeans-clusters" class="text-sm font-medium">Clusters (K):</label>
+                                    <input type="number" id="kmeans-clusters" value="3" min="2" max="10" class="w-20 border-gray-300 rounded-md">
+                                </div>
+                                <div id="kmeans-loader" class="hidden mx-auto mt-4 h-8 w-8 animate-spin rounded-full border-4 border-solid border-rose-500 border-t-transparent"></div>
+                                <div id="kmeans-chart-container" class="relative h-80 mt-4 hidden"><canvas id="kmeans-chart"></canvas></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Preview Modal -->
+    <div id="preview-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div id="preview-modal-content" class="bg-white rounded-lg shadow-xl w-11/12 max-w-6xl h-5/6 flex flex-col">
+            <div id="preview-modal-header" class="p-4 border-b flex justify-between items-center">
+                <h2 class="text-xl font-semibold">Data Preview (Top 500 Rows)</h2>
+                <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+            </div>
+            <div class="p-4 overflow-auto">
+                {{ data_preview|safe }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Action Buttons -->
+    <div class="fixed bottom-4 left-4 space-y-2">
+        <a href="https://github.com/PriyanujBoruah/Automated-EDA-Report" target="_blank" title="GitHub Repo" class="w-12 h-12 bg-gray-800 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-gray-900 transition-colors">
+            <svg class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.168 6.839 9.492.5.092.682-.217.682-.482 0-.237-.009-.868-.014-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.031-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.203 2.398.1 2.651.64.7 1.03 1.595 1.03 2.688 0 3.848-2.338 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.001 10.001 0 0022 12c0-5.523-4.477-10-10-10z" clip-rule="evenodd" />
+            </svg>
+        </a>
+        <a href="https://www.linkedin.com/in/priyanuj-boruah/" target="_blank" title="LinkedIn Profile" class="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-blue-700 transition-colors">
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" />
+            </svg>
+        </a>
+    </div>
+
+    <script>
+        let correlationChart, histogramChart, scatterChart, rfChart, lgbmChart, heatmapChart, kmeansChart, pcaChart, elbowChart, dbscanChart;
+        let rfCmChart, rfRocChart, lgbmCmChart, lgbmRocChart;
+
+        // --- Correlation Chart Logic ---
+        const getCorrelationColors = (d) => ({ bg: d.map(v => v >= 0 ? 'rgba(74, 222, 128, 0.6)' : 'rgba(248, 113, 113, 0.6)'), bc: d.map(v => v >= 0 ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)') });
+        const createCorrelationChart = (l, d) => { const {bg,bc}=getCorrelationColors(d); const c={type:'bar',data:{labels:l,datasets:[{label:'Correlation',data:d,backgroundColor:bg,borderColor:bc,borderWidth:1}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'Pearson Correlation'},min:-1,max:1},y:{ticks:{autoSkip:false}}}}}; correlationChart=new Chart(document.getElementById('correlationChart').getContext('2d'),c); };
+        const updateCorrelationChart = async () => { const t=document.getElementById('target_column').value, f=document.getElementById('filename').value; try { const r=await fetch('/update_chart',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:f,target_column:t})}); if(!r.ok)throw new Error((await r.json()).error||'Failed'); const n=await r.json(); document.getElementById('chart-subtitle').innerHTML=`Correlation with target: '${n.target_variable}'.`; const {bg,bc}=getCorrelationColors(n.data); correlationChart.data.labels=n.labels; correlationChart.data.datasets[0].data=n.data; correlationChart.data.datasets[0].backgroundColor=bg; correlationChart.data.datasets[0].borderColor=bc; correlationChart.update(); } catch(e){alert('Could not update chart: '+e.message);} };
+
+        // --- Histogram Chart Logic ---
+        const createHistogramChart = (l, d) => { const c={type:'bar',data:{labels:l,datasets:[{label:'Frequency',data:d,backgroundColor:'rgba(99, 102, 241, 0.6)',borderColor:'rgba(79, 70, 229, 1)',borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{title:{display:true,text:'Frequency'}},x:{title:{display:true,text:'Value Bins'}}}}}; histogramChart=new Chart(document.getElementById('histogramChart').getContext('2d'),c); };
+        const updateHistogram = async () => { const c=document.getElementById('histogram_column').value, f=document.getElementById('filename').value; try { const r=await fetch('/get_histogram',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:f,column_name:c})}); if(!r.ok)throw new Error((await r.json()).error||'Failed'); const n=await r.json(); if(histogramChart){histogramChart.data.labels=n.labels; histogramChart.data.datasets[0].data=n.data; histogramChart.update();}else{createHistogramChart(n.labels,n.data);} } catch(e){alert('Could not update histogram: '+e.message);} };
+
+        // --- Scatter Plot Logic ---
+        const createScatterChart = (d, x, y) => { const c={type:'scatter',data:{datasets:[{label:`${y} vs ${x}`,data:d,backgroundColor:'rgba(59, 130, 246, 0.5)'}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{type:'linear',position:'bottom',title:{display:true,text:x}},y:{title:{display:true,text:y}}}}}; scatterChart=new Chart(document.getElementById('scatterChart').getContext('2d'),c); };
+        const updateScatterPlot = async () => { const x=document.getElementById('scatter_x_column').value, y=document.getElementById('scatter_y_column').value, f=document.getElementById('filename').value; try { const r=await fetch('/get_scatter_data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:f,x_column:x,y_column:y})}); if(!r.ok)throw new Error((await r.json()).error||'Failed'); const n=await r.json(); if(scatterChart){scatterChart.data.datasets[0].data=n.data; scatterChart.data.datasets[0].label=`${y} vs ${x}`; scatterChart.options.scales.x.title.text=x; scatterChart.options.scales.y.title.text=y; scatterChart.update();}else{createScatterChart(n.data,x,y);} } catch(e){alert('Could not update scatter plot: '+e.message);} };
+        
+        // --- Feature Importance Logic ---
+        const runFeatureImportance = async (modelType) => {
+            const btn = document.getElementById(`run-${modelType}-btn`);
+            const loader = document.getElementById(`${modelType}-loader`);
+            const chartContainer = document.getElementById(`${modelType}-chart-container`);
+            const metricsContainer = document.getElementById(`${modelType}-metrics-container`);
+            const advancedContainer = document.getElementById(`${modelType}-advanced-eval-container`);
+            let chartInstance = modelType === 'rf' ? rfChart : lgbmChart;
+            
+            btn.disabled = true; btn.innerText = 'Running...';
+            loader.classList.remove('hidden'); 
+            chartContainer.classList.add('hidden');
+            metricsContainer.classList.add('hidden');
+            advancedContainer.classList.add('hidden');
+
+            const t=document.getElementById('target_column').value, f=document.getElementById('filename').value;
+            
+            let params = {};
+            if (modelType === 'rf') {
+                params.n_estimators = document.getElementById('rf-n_estimators').value;
+                params.max_depth = document.getElementById('rf-max_depth').value;
+            } else {
+                params.n_estimators = document.getElementById('lgbm-n_estimators').value;
+                params.learning_rate = document.getElementById('lgbm-learning_rate').value;
+                params.num_leaves = document.getElementById('lgbm-num_leaves').value;
+            }
+
+            try {
+                const r = await fetch('/get_feature_importance', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:f,target_column:t, model_type: modelType, params: params})});
+                if (!r.ok) throw new Error((await r.json()).error || 'Failed');
+                const n = await r.json();
+                
+                let metricsHtml = '<strong>Performance Metrics:</strong><ul class="list-disc list-inside mt-1">';
+                for (const [key, value] of Object.entries(n.metrics)) {
+                    metricsHtml += `<li>${key}: ${value}</li>`;
+                }
+                metricsHtml += '</ul>';
+                metricsContainer.innerHTML = metricsHtml;
+                metricsContainer.classList.remove('hidden');
+
+                chartContainer.classList.remove('hidden');
+                const chartConfig = {type:'bar',data:{labels:n.labels,datasets:[{label:'Importance',data:n.data,backgroundColor: modelType === 'rf' ? 'rgba(245, 158, 11, 0.6)' : 'rgba(20, 184, 166, 0.6)',borderColor: modelType === 'rf' ? 'rgba(217, 119, 6, 1)' : 'rgba(13, 148, 136, 1)',borderWidth:1}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'Feature Importance Score'}}}}};
+                
+                const chartCanvas = document.getElementById(`${modelType}-chart`).getContext('2d');
+                if (chartInstance) { chartInstance.destroy(); }
+                if (modelType === 'rf') { rfChart = new Chart(chartCanvas, chartConfig); } 
+                else { lgbmChart = new Chart(chartCanvas, chartConfig); }
+                
+                if (n.confusion_matrix) {
+                    advancedContainer.classList.remove('hidden');
+                    renderConfusionMatrix(modelType, n.confusion_matrix);
+                    renderRocCurve(modelType, n.roc_curve);
+                }
+
+            } catch (e) { alert(`Could not run ${modelType} analysis: ` + e.message);
+            } finally { btn.disabled = false; btn.innerText = 'Run Analysis'; loader.classList.add('hidden'); }
+        };
+        
+        // --- Advanced Evaluation Chart Logic ---
+        const renderConfusionMatrix = (modelType, cmData) => {
+            let chartInstance = modelType === 'rf' ? rfCmChart : lgbmCmChart;
+            const chartCanvas = document.getElementById(`${modelType}-cm-chart`).getContext('2d');
+            if (chartInstance) { chartInstance.destroy(); }
+            
+            const data = [];
+            for (let i = 0; i < cmData.labels.length; i++) {
+                for (let j = 0; j < cmData.labels.length; j++) {
+                    data.push({x: cmData.labels[j], y: cmData.labels[i], v: cmData.matrix[i][j]});
+                }
+            }
+
+            const config = { type: 'matrix', data: { datasets: [{ label: 'Confusion Matrix', data, backgroundColor: 'rgba(99, 102, 241, 0.6)', width: ({chart}) => (chart.chartArea.width / cmData.labels.length) - 1, height: ({chart}) => (chart.chartArea.height / cmData.labels.length) - 1 }] }, options: { plugins: { legend: {display: false}, title: {display: true, text: 'Confusion Matrix'}, tooltip: { callbacks: { title:()=>'', label: (ctx) => `Predicted: ${ctx.raw.x}, Actual: ${ctx.raw.y}, Count: ${ctx.raw.v}` } } }, scales: { x: { type: 'category', labels: cmData.labels, title: {display: true, text: 'Predicted'} }, y: { type: 'category', labels: cmData.labels, title: {display: true, text: 'Actual'}, offset: true } } } };
+            if (modelType === 'rf') { rfCmChart = new Chart(chartCanvas, config); } 
+            else { lgbmCmChart = new Chart(chartCanvas, config); }
+        };
+
+        const renderRocCurve = (modelType, rocData) => {
+            let chartInstance = modelType === 'rf' ? rfRocChart : lgbmRocChart;
+            const chartCanvas = document.getElementById(`${modelType}-roc-chart`).getContext('2d');
+            if (chartInstance) { chartInstance.destroy(); }
+            
+            const rocPoints = rocData.fpr.map((fp, i) => ({x: fp, y: rocData.tpr[i]}));
+            
+            const config = { type: 'scatter', data: { datasets: [ { label: `ROC Curve (AUC = ${rocData.auc})`, data: rocPoints, showLine: true, borderColor: 'rgba(239, 68, 68, 1)', backgroundColor: 'transparent', pointRadius: 2 }, { label: 'Baseline', data: [{x:0, y:0}, {x:1, y:1}], showLine: true, borderColor: 'rgba(107, 114, 128, 1)', borderDash: [5,5], backgroundColor: 'transparent', pointRadius: 0 } ] }, options: { plugins: { title: {display: true, text: 'ROC Curve'} }, scales: { x: {type: 'linear', position: 'bottom', title: {display: true, text: 'False Positive Rate'}}, y: {title: {display: true, text: 'True Positive Rate'}} } } };
+            if (modelType === 'rf') { rfRocChart = new Chart(chartCanvas, config); }
+            else { lgbmRocChart = new Chart(chartCanvas, config); }
+        };
+        
+        // --- Heatmap Logic ---
+        const runHeatmapAnalysis = async () => {
+            const btn = document.getElementById('run-heatmap-btn');
+            const loader = document.getElementById('heatmap-loader');
+            const chartContainer = document.getElementById('heatmap-chart-container');
+
+            btn.disabled = true; btn.innerText = 'Generating...';
+            loader.classList.remove('hidden'); chartContainer.classList.add('hidden');
+
+            try {
+                const response = await fetch('/get_heatmap_data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: document.getElementById('filename').value }) });
+                if (!response.ok) throw new Error((await response.json()).error || 'Failed');
+                const heatmapData = await response.json();
+
+                chartContainer.classList.remove('hidden');
+                const config = {
+                    type: 'matrix',
+                    data: {
+                        labels: heatmapData.labels,
+                        datasets: [{
+                            label: 'Correlation Matrix',
+                            data: heatmapData.data,
+                            backgroundColor: (ctx) => {
+                                const value = ctx.dataset.data[ctx.dataIndex].v;
+                                const alpha = Math.abs(value);
+                                return value > 0 ? `rgba(239, 68, 68, ${alpha})` : `rgba(59, 130, 246, ${alpha})`;
+                            },
+                            borderColor: 'rgba(255, 255, 255, 0.5)',
+                            borderWidth: 1,
+                            width: ({chart}) => (chart.chartArea || {}).width / heatmapData.labels.length - 1,
+                            height: ({chart}) => (chart.chartArea || {}).height / heatmapData.labels.length - 1
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    title: () => '',
+                                    label: (ctx) => [`${ctx.dataset.data[ctx.dataIndex].y} vs ${ctx.dataset.data[ctx.dataIndex].x}`, `Correlation: ${ctx.dataset.data[ctx.dataIndex].v}`]
+                                }
+                            }
+                        },
+                        scales: { x: { type: 'category', labels: heatmapData.labels, ticks: { display: true } }, y: { type: 'category', labels: heatmapData.labels, offset: true, ticks: { display: true } } }
+                    }
+                };
+                if (heatmapChart) { heatmapChart.destroy(); }
+                heatmapChart = new Chart(document.getElementById('heatmapChart').getContext('2d'), config);
+            } catch(e) {
+                alert('Could not generate heatmap: ' + e.message);
+            } finally {
+                btn.disabled = false; btn.innerText = 'Generate Heatmap'; loader.classList.add('hidden');
+            }
+        };
+
+        // --- Unsupervised Models Logic ---
+        const runUnsupervisedModel = async (modelType) => {
+            const btn = document.getElementById(`run-${modelType}-btn`);
+            const loader = document.getElementById(`${modelType}-loader`);
+            const chartContainer = document.getElementById(`${modelType}-chart-container`);
+            let chartInstance;
+            if (modelType === 'kmeans') chartInstance = kmeansChart;
+            else if (modelType === 'pca') chartInstance = pcaChart;
+            else if (modelType === 'dbscan') chartInstance = dbscanChart;
+
+            btn.disabled = true; btn.innerText = 'Running...';
+            loader.classList.remove('hidden'); chartContainer.classList.add('hidden');
+
+            let payload = { filename: document.getElementById('filename').value, model_type: modelType };
+            if (modelType === 'kmeans') {
+                payload.n_clusters = document.getElementById('kmeans-clusters').value;
+            } else if (modelType === 'dbscan') {
+                payload.eps = document.getElementById('dbscan-eps').value;
+                payload.min_samples = document.getElementById('dbscan-min-samples').value;
+            }
+
+            try {
+                const response = await fetch('/run_unsupervised_model', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) throw new Error((await response.json()).error || 'Failed');
+                const result = await response.json();
+                
+                chartContainer.classList.remove('hidden');
+                let chartConfig;
+
+                if (modelType === 'pca') {
+                    document.getElementById('pca-variance').innerText = `PC1 explains ${ (result.explained_variance[0]*100).toFixed(1) }% variance, PC2 explains ${ (result.explained_variance[1]*100).toFixed(1) }% variance.`;
+                    chartConfig = { type: 'scatter', data: { datasets: [{ label: 'PCA Projection', data: result.data, backgroundColor: 'rgba(249, 115, 22, 0.6)' }] }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Principal Component 1' } }, y: { title: { display: true, text: 'Principal Component 2' } } } } };
+                } else { // kmeans or dbscan
+                    const colors = ['rgba(225, 29, 72, 0.6)', 'rgba(59, 130, 246, 0.6)', 'rgba(34, 197, 94, 0.6)', 'rgba(168, 85, 247, 0.6)', 'rgba(234, 179, 8, 0.6)', 'rgba(20, 184, 166, 0.6)', 'rgba(217, 70, 239, 0.6)', 'rgba(245, 158, 11, 0.6)'];
+                    const datasets = result.grouped_data.map(group => {
+                        const isNoise = group.cluster_id === -1;
+                        return {
+                            label: isNoise ? 'Noise' : `Cluster ${group.cluster_id + 1}`,
+                            data: group.points,
+                            backgroundColor: isNoise ? 'rgba(107, 114, 128, 0.4)' : colors[group.cluster_id % colors.length]
+                        }
+                    });
+                    chartConfig = { type: 'scatter', data: { datasets: datasets }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Principal Component 1' } }, y: { title: { display: true, text: 'Principal Component 2' } } } } };
+                }
+
+                const chartCanvas = document.getElementById(`${modelType}-chart`).getContext('2d');
+                if (chartInstance) { chartInstance.destroy(); }
+                if (modelType === 'kmeans') { kmeansChart = new Chart(chartCanvas, chartConfig); } 
+                else if (modelType === 'pca') { pcaChart = new Chart(chartCanvas, chartConfig); }
+                else if (modelType === 'dbscan') { dbscanChart = new Chart(chartCanvas, chartConfig); }
+
+            } catch (e) {
+                alert(`Could not run ${modelType} analysis: ` + e.message);
+            } finally {
+                btn.disabled = false; 
+                if(modelType === 'kmeans') btn.innerText = 'Find K-Means Clusters';
+                else if (modelType === 'pca') btn.innerText = 'Run Analysis';
+                else if (modelType === 'dbscan') btn.innerText = 'Find Density Clusters';
+                loader.classList.add('hidden');
+            }
+        };
+        
+        const runElbowMethod = async () => {
+            const btn = document.getElementById('run-elbow-btn');
+            const loader = document.getElementById('elbow-loader');
+            const chartContainer = document.getElementById('elbow-chart-container');
+            
+            btn.disabled = true; btn.innerText = 'Calculating...';
+            loader.classList.remove('hidden'); chartContainer.classList.add('hidden');
+
+            try {
+                const response = await fetch('/get_elbow_data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: document.getElementById('filename').value }) });
+                if (!response.ok) throw new Error((await response.json()).error || 'Failed');
+                const result = await response.json();
+
+                chartContainer.classList.remove('hidden');
+                const chartConfig = {
+                    type: 'line',
+                    data: {
+                        labels: result.cluster_numbers,
+                        datasets: [{ label: 'Inertia Score', data: result.inertia_scores, borderColor: 'rgba(192, 75, 192, 1)', backgroundColor: 'rgba(192, 75, 192, 0.2)', fill: false, tension: 0.1 }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { title: { display: true, text: 'Elbow Method for Optimal K' } },
+                        scales: { x: { title: { display: true, text: 'Number of Clusters (K)' } }, y: { title: { display: true, text: 'Inertia' } } }
+                    }
+                };
+                const chartCanvas = document.getElementById('elbow-chart').getContext('2d');
+                if (elbowChart) { elbowChart.destroy(); }
+                elbowChart = new Chart(chartCanvas, chartConfig);
+            } catch (e) {
+                alert('Could not run Elbow Method: ' + e.message);
+            } finally {
+                btn.disabled = false; btn.innerText = 'Find Optimal K (Elbow Method)';
+                loader.classList.add('hidden');
+            }
+        };
+
+        // --- Event Listeners ---
+        document.addEventListener('DOMContentLoaded', () => {
+            createCorrelationChart(JSON.parse('{{ chart_labels | safe }}'), JSON.parse('{{ chart_data | safe }}'));
+            if (document.getElementById('histogram_column')?.options.length > 0) updateHistogram();
+            if (document.getElementById('scatter_x_column')?.options.length > 1) updateScatterPlot();
+
+            // Navbar interactivity
+            const menuBtn = document.getElementById('menu-btn');
+            const menuDropdown = document.getElementById('menu-dropdown');
+            menuBtn.addEventListener('click', () => {
+                menuDropdown.classList.toggle('hidden');
+            });
+            document.addEventListener('click', (e) => {
+                if (!menuBtn.contains(e.target) && !menuDropdown.contains(e.target)) {
+                    menuDropdown.classList.add('hidden');
+                }
+            });
+            
+            // Modal interactivity
+            const previewBtn = document.getElementById('preview-btn');
+            const modal = document.getElementById('preview-modal');
+            const closeModalBtn = document.getElementById('close-modal-btn');
+            previewBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            });
+            closeModalBtn.addEventListener('click', () => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            });
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                }
+            });
+        });
+        document.getElementById('target_column').addEventListener('change', updateCorrelationChart);
+        document.getElementById('histogram_column')?.addEventListener('change', updateHistogram);
+        document.getElementById('scatter_x_column')?.addEventListener('change', updateScatterPlot);
+        document.getElementById('scatter_y_column')?.addEventListener('change', updateScatterPlot);
+        document.getElementById('run-rf-btn').addEventListener('click', () => runFeatureImportance('rf'));
+        document.getElementById('run-lgbm-btn').addEventListener('click', () => runFeatureImportance('lgbm'));
+        document.getElementById('run-heatmap-btn').addEventListener('click', runHeatmapAnalysis);
+        document.getElementById('run-kmeans-btn').addEventListener('click', () => runUnsupervisedModel('kmeans'));
+        document.getElementById('run-pca-btn').addEventListener('click', () => runUnsupervisedModel('pca'));
+        document.getElementById('run-elbow-btn').addEventListener('click', runElbowMethod);
+        document.getElementById('run-dbscan-btn').addEventListener('click', () => runUnsupervisedModel('dbscan'));
+    </script>
+</body>
+</html>
