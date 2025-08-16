@@ -2,7 +2,7 @@
 
 An interactive desktop application that performs a comprehensive Exploratory Data Analysis (EDA) on your datasets. Built with Python, Flask, and PyWebview, this tool allows you to upload a CSV or XLSX file and instantly generate key statistics, visualizations, and machine learning insights without writing any code.
 
-## Get The Executable
+## Get The .exe File And Run Instantly
 [Download the file](https://drive.google.com/file/d/1FiSjoJqjo2F0dj5suOCxTumAhw6SSJrv/view?usp=drive_link)
 
 ## Features
